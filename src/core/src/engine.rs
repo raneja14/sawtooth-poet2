@@ -114,6 +114,8 @@ impl Engine for Poet2Engine {
                                 let mut claim_block_dur:u64 = 0_u64;
                                 claim_block_dur = wait_time.clone().as_secs();
 
+                                let mut new_block_dur = get_cert_from(&block).wait_time;
+
                                 // Current block points to current head
                                 // Check if block already claimed. Go on to
                                 // compare duration then. Accept one of them
@@ -121,15 +123,15 @@ impl Engine for Poet2Engine {
                                 if block.block_num == (1 + chain_head.block_num)
                                       && block.previous_id == chain_head.block_id {
 
-                                    let mut new_block_dur = get_cert_from(&block).wait_time;
-                                    debug!("New block duration {} Claim block duration {}", new_block_dur, claim_block_dur);
+                                    debug!("New block duration {} Claim block duration {}",
+                                               new_block_dur, claim_block_dur);
                                     if new_block_dur <= claim_block_dur{
                                         info!("Discarding the block in progress.");
                                         service.cancel_block();
                                         published_at_height = true;
                                         info!("New block extends current chain. Committing {:?}", block);
                                         let mut agg_chain_clock = service.get_chain_clock() +
-                                                        get_cert_from(&block).wait_time;
+                                                                    new_block_dur;
                                         let mut state = ConsensusState::default();
                                         state.aggregate_chain_clock = agg_chain_clock;
                                         state.estimate_info = EstimateInfo{
@@ -159,7 +161,7 @@ impl Engine for Poet2Engine {
                                         let mut block_state;
                                         let mut block_state_;
                                         let mut cc_upto_head = service.get_chain_clock();
-                                        let mut fork_cc:u64 = get_cert_from(&cache_block).wait_time;
+                                        let mut fork_cc:u64 = new_block_dur;
                                         let mut fork_len:u64 = 1;
                                         let mut cc_upto_ancestor = 0_u64;
                                         let mut ancestor_found:bool = false;
@@ -370,8 +372,9 @@ impl Engine for Poet2Engine {
 
 fn get_cert_from(block: &Block) -> WaitCertificate {
     let mut payload = block.payload.clone();
+    debug!("Extracted payload from block: {:?}", payload.clone());
     let (wait_certificate, _) = poet2_util::payload_to_wc_and_sig(payload);
-    debug!("Got wait_cert : {:?}", &wait_certificate);
+    debug!("Serialized wait_cert : {:?}", &wait_certificate);
     serde_json::from_str(&wait_certificate).unwrap()
 }
 
